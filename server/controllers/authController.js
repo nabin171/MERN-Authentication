@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import userModel from "../models/userModal.js";
 import transporter from "../config/nodemailer.js";
+import { authenticateWithLDAP } from "../config/ldap.js";
 
 export const register = async (req, res) => {
   const { name, email, password } = req.body;
@@ -100,5 +101,114 @@ export const logout = async (req, res) => {
     });
   } catch (error) {
     res.json({ success: false, message: error.message });
+  }
+};
+
+export const ldapLogin = async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.json({
+      success: false,
+      message: "Username and password are required",
+    });
+  }
+
+  try {
+    const ldapUser = await authenticateWithLDAP(username, password);
+
+    // Find or create user in MongoDB
+    let user = await userModel.findOne({ email: ldapUser.mail });
+
+    if (!user) {
+      user = new userModel({
+        name: ldapUser.cn || username,
+        email: ldapUser.mail,
+        password: "LDAP_USER",
+        isAccountVerified: true,
+      });
+      await user.save();
+    }
+
+    // Issue JWT — same as your normal login
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({ success: true, message: "LDAP login successful" });
+  } catch (error) {
+    return res.json({ success: false, message: error.message });
+  }
+};
+
+//send verifiaction otp to user email
+export const sendVerifyOtp = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await userModel.findById(userId);
+    if (user.isAccountVerified) {
+      return res.json({
+        success: false,
+        message: "Account already verified",
+      });
+    }
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    user.sendVerifyOtp = otp;
+    user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+    await user.save();
+    const mailOption = {
+      from: process.env.SENDER_EMAIL,
+      to: user.email,
+      subject: "Account verification otp",
+      text: `Your OTP is ${otp}. verify your account using this otp `,
+    };
+    await transporter.sendMail(mailOption);
+    return res.json({
+      success: true,
+      message: "Verification OTP sent on Email",
+    });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+export const verifyEmail = async (req, res) => {
+  const { userId, otp } = req.body;
+  if (!userId || !otp) {
+    return res.json({
+      success: false,
+      message: "Missing Details",
+    });
+  }
+
+  try {
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    if (user.verifyOtp === "" || user.verifyOtp !== otp) {
+      return res.json({ success: false, message: "Invalid otp " });
+    }
+    if (user.verifyOtpExpireAt < Date.now()) {
+      return res.json({ success: false, message: "OTP Expired" });
+    }
+    user.isAccountVerified = true;
+    user.verifyOtp = "";
+    user.verifyOtpExpireAt = 0;
+    await user.save();
+    return res.json({ success: true, message: "Email verified successfully" });
+  } catch (error) {
+    return res.json({ success: false, message: error.message });
   }
 };

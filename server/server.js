@@ -15,6 +15,5 @@ app.use(cors({ credentials: true }));
 //api endpoints
 app.get("/", (req, res) => res.send("API working"));
 app.use("/api/auth", authRouter);
-console.log("ENV CHECK:", process.env.SMTP_USER, process.env.SMTP_PASS);
 
 app.listen(port, () => console.log(`Server started on PORT: ${port}`));
