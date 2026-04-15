@@ -36,7 +36,6 @@ export const register = async (req, res) => {
       text: `Welcome to my mern authentication project. your account has been creted with email id:${email}, `,
     };
 
-    console.log("mail options", mailOptions);
     await transporter.sendMail(mailOptions);
     return res.json({
       success: true,
@@ -161,7 +160,7 @@ export const sendVerifyOtp = async (req, res) => {
     }
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    user.sendVerifyOtp = otp;
+    user.verifyOtp = otp;
     user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
     await user.save();
     const mailOption = {
@@ -179,7 +178,7 @@ export const sendVerifyOtp = async (req, res) => {
     res.json({ success: false, message: error.message });
   }
 };
-
+//verify email using otp
 export const verifyEmail = async (req, res) => {
   const { userId, otp } = req.body;
   if (!userId || !otp) {
@@ -208,6 +207,78 @@ export const verifyEmail = async (req, res) => {
     user.verifyOtpExpireAt = 0;
     await user.save();
     return res.json({ success: true, message: "Email verified successfully" });
+  } catch (error) {
+    return res.json({ success: false, message: error.message });
+  }
+};
+
+//check if user is authenticated
+export const isAuthenticated = async (req, res) => {
+  try {
+    return res.json({ success: true });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+//send password reseet otp
+export const sendResetOtp = async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.json({ success: false, message: "Email is required" });
+  }
+  try {
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      return res.json({ success: false, message: "user not found" });
+    }
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    user.resetOtp = otp;
+    user.resetOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+    await user.save();
+    const mailOption = {
+      from: process.env.SENDER_EMAIL,
+      to: user.email,
+      subject: "Password reset Otp",
+      text: `Your OTP for resetting your password is${otp}. use this otp to proceed with resetting your password`,
+    };
+    await transporter.sendMail(mailOption);
+    return res.json({ success: true, message: "Otp send to you email" });
+  } catch (error) {
+    return res.json({ success: false, message: error.message });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) {
+    return res.json({
+      success: false,
+      message: "Email,OTp and new password are required",
+    });
+  }
+  try {
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+    if ((user.resetOtp === "") | (user.resetOtp !== otp)) {
+      return res.json({ success: false, message: "Invalid OTp" });
+    }
+
+    if (user.resetOtpExpireAt < Date.now()) {
+      return res.json({ success: false, message: "OTp expired" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.resetOtp = "";
+    user.resetOtpExpireAt = 0;
+    await user.save();
+    return res.json({
+      success: true,
+      message: "Password has been reset successfully",
+    });
   } catch (error) {
     return res.json({ success: false, message: error.message });
   }
