@@ -1,11 +1,12 @@
 import axios from "axios";
-import { set } from "mongoose";
-import { createContext, useState } from "react";
+
+import { createContext, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
 export const AppContent = createContext();
 
 export const AppContextProvider = (props) => {
+  axios.defaults.withCredentials = true;
   const backendUrl = import.meta.env.VITE_BACKEND_URL;
   const [isLoggedin, setIsLoggedin] = useState(false);
   const [userData, setUserData] = useState(false);
@@ -21,6 +22,7 @@ export const AppContextProvider = (props) => {
       toast.error(error.response?.data?.message || "Something went wrong");
     }
   };
+
   const getUserData = async () => {
     try {
       const { data } = await axios.get(backendUrl + "/api/user/data", {
@@ -36,6 +38,10 @@ export const AppContextProvider = (props) => {
       toast.error(error.response?.data?.message || "Something went wrong");
     }
   };
+
+  useEffect(() => {
+    getAuthState();
+  }, []);
 
   const value = {
     backendUrl,
