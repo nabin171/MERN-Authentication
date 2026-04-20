@@ -3,7 +3,10 @@ import jwt from "jsonwebtoken";
 import userModel from "../models/userModal.js";
 import transporter from "../config/nodemailer.js";
 import { authenticateWithLDAP } from "../config/ldap.js";
-
+import {
+  EMAIL_VERIFY_TEMPLATE,
+  PASSWORD_RESET_TEMPLATE,
+} from "../config/emailTemplates.js";
 export const register = async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
@@ -168,6 +171,10 @@ export const sendVerifyOtp = async (req, res) => {
       to: user.email,
       subject: "Account verification otp",
       text: `Your OTP is ${otp}. verify your account using this otp `,
+      html: EMAIL_VERIFY_TEMPLATE.replace("{{otp}}", otp).replace(
+        "  {{email}}",
+        user.email,
+      ),
     };
     await transporter.sendMail(mailOption);
     return res.json({
@@ -240,7 +247,11 @@ export const sendResetOtp = async (req, res) => {
       from: process.env.SENDER_EMAIL,
       to: user.email,
       subject: "Password reset Otp",
-      text: `Your OTP for resetting your password is${otp}. use this otp to proceed with resetting your password`,
+      // text: `Your OTP for resetting your password is${otp}. use this otp to proceed with resetting your password`,
+      html: EMAIL_VERIFY_TEMPLATE.replace("{{otp}}", otp).replace(
+        "  {{email}}",
+        user.email,
+      ),
     };
     await transporter.sendMail(mailOption);
     return res.json({ success: true, message: "Otp send to you email" });
