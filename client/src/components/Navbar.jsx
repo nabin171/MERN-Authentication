@@ -10,7 +10,7 @@ const Navbar = () => {
     useContext(AppContent);
   const sendVerificationOtp = async () => {
     try {
-      axios.defaults.withCredentials = true;
+      defaults.withCredentials = true;
       const { data } = await axios.post(
         backendUrl + "/api/auth/send-verify-otp",
       );
